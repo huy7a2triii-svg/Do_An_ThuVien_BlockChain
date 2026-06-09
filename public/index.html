@@ -16,7 +16,6 @@
         .btn-mine:hover { background: #218838; }
         .btn-hack { background: #dc3545; }
         .btn-hack:hover { background: #c82333; }
-        /* Style cho nút Reset mới */
         .btn-reset { background: #6c757d; }
         .btn-reset:hover { background: #5a6268; }
         input, select { width: 100%; padding: 8px; margin: 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
@@ -39,11 +38,59 @@
             10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
             20%, 40%, 60%, 80% { transform: translateX(10px); }
         }
+
+        /* --- STYLE MỚI CHO PHẦN ĐĂNG NHẬP / ĐĂNG KÝ --- */
+        .auth-wrapper { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+        .auth-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .auth-toggle { text-align: center; margin-top: 15px; font-size: 0.9em; color: #555; }
+        .auth-toggle span { color: #007bff; cursor: pointer; font-weight: bold; }
+        .auth-toggle span:hover { text-decoration: underline; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn-logout { background: #e74c3c; width: auto; margin-top: 0; padding: 8px 15px; }
+        .btn-logout:hover { background: #c0392b; }
+        .user-info { font-weight: bold; color: #2c3e50; }
+        
+        /* Ẩn giao diện chính mặc định */
+        #mainContent { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div id="authContent" class="auth-wrapper">
+    <div id="loginCard" class="auth-card">
+        <h2>Đăng Nhập</h2>
+        <form id="loginForm">
+            <label>Mã số sinh viên (Tài khoản):</label>
+            <input type="text" id="loginUsername" placeholder="Ví dụ: SE160123" required>
+            <label>Mật khẩu:</label>
+            <input type="password" id="loginPassword" placeholder="••••••••" required>
+            <button type="submit" class="btn">Đăng Nhập</button>
+        </form>
+        <div class="auth-toggle">Chưa có tài khoản? <span onclick="toggleAuth(false)">Đăng ký ngay</span></div>
+    </div>
+
+    <div id="registerCard" class="auth-card" style="display: none;">
+        <h2>Đăng Ký Tài Khoản</h2>
+        <form id="registerForm">
+            <label>Mã số sinh viên (MSV):</label>
+            <input type="text" id="regUsername" placeholder="Ví dụ: SE160123" required>
+            <label>Mật khẩu:</label>
+            <input type="password" id="regPassword" placeholder="Nhập mật khẩu" required>
+            <label>Xác nhận mật khẩu:</label>
+            <input type="password" id="regConfirmPassword" placeholder="Nhập lại mật khẩu" required>
+            <button type="submit" class="btn btn-mine">Đăng Ký</button>
+        </form>
+        <div class="auth-toggle">Đã có tài khoản? <span onclick="toggleAuth(true)">Đăng nhập</span></div>
+    </div>
+</div>
+
+
+<div id="mainContent" class="container">
+    <div class="header-actions">
+        <span class="user-info">Xin chào: <span id="displayUser" style="color: #007bff;"></span></span>
+        <button id="logoutBtn" class="btn btn-logout">Đăng xuất 🚪</button>
+    </div>
+
     <h1>📚 Hệ thống Quản lý Thư viện Sinh viên (Blockchain)</h1>
     
     <div id="chainStatus" class="status-box status-valid">
@@ -55,7 +102,7 @@
             <h2>1. Tạo Giao Dịch Mượn/Trả Sách (Sinh viên)</h2>
             <form id="txForm">
                 <label>Mã số sinh viên (MSV):</label>
-                <input type="text" id="studentId" placeholder="Ví dụ: SE160123" required>
+                <input type="text" id="studentId" placeholder="Ví dụ: SE160123" readonly required style="background: #e9ecef; cursor: not-allowed;">
                 
                 <label>Hành động:</label>
                 <select id="action">
@@ -91,77 +138,157 @@
 </div>
 
 <script>
-    // Hàm gọi API lấy dữ liệu chuỗi và vẽ lên UI
-    async function updateUI() {
-        // 1. Lấy dữ liệu chuỗi khối
-        const res = await fetch('/api/chain');
-        const data = await res.json();
-        
-        // Tương thích linh hoạt với cả 2 cách viết object trả về từ server
-        const isChainValidObj = data.isValid !== undefined ? data.isValid : data.status;
-        const currentChain = data.chain;
+    // --- KHỞI TẠO HỆ THỐNG XÁC THỰC (BẰNG LOCALSTORAGE CHỐNG CHÁY) ---
+    if (!localStorage.getItem('usersDB')) {
+        // Tạo sẵn một tài khoản mặc định để test nhanh
+        localStorage.setItem('usersDB', JSON.stringify({ "SE160123": "123456" }));
+    }
 
-        const statusBox = document.getElementById('chainStatus');
-        if(isChainValidObj.valid) {
-            statusBox.className = "status-box status-valid";
-            statusBox.innerText = "✅ Hệ thống Blockchain an toàn. Toàn bộ lịch sử mượn trả khớp mã Hash!";
-        } else {
-            statusBox.className = "status-box status-invalid";
-            const reason = isChainValidObj.reason ? isChainValidObj.reason : `Phát hiện can thiệp tại khối số ${isChainValidObj.block}`;
-            statusBox.innerText = `❌ PHÁT HIỆN GIAN LẬN DỮ LIỆU: ${reason}`;
+    function toggleAuth(showLogin) {
+        document.getElementById('loginCard').style.display = showLogin ? 'block' : 'none';
+        document.getElementById('registerCard').style.display = showLogin ? 'none' : 'block';
+    }
+
+    // Xử lý Đăng ký
+    document.getElementById('registerForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const user = document.getElementById('regUsername').value.trim();
+        const pass = document.getElementById('regPassword').value;
+        const confirmPass = document.getElementById('regConfirmPassword').value;
+
+        if (pass !== confirmPass) {
+            alert("Mật khẩu xác nhận không trùng khớp!");
+            return;
         }
 
-        const blockchainView = document.getElementById('blockchainView');
-        blockchainView.innerHTML = '';
+        let users = JSON.parse(localStorage.getItem('usersDB'));
+        if (users[user]) {
+            alert("Mã số sinh viên này đã được đăng ký!");
+            return;
+        }
 
-        currentChain.forEach((block, index) => {
-            const blockEl = document.createElement('div');
-            
-            // Xử lý tìm vị trí khối lỗi để đổi màu đỏ trực quan
-            let corruptedIdx = -1;
-            if (!isChainValidObj.valid) {
-                if (isChainValidObj.reason) {
-                    const match = isChainValidObj.reason.match(/\d+/);
-                    if (match) corruptedIdx = parseInt(match[0]);
-                } else if (isChainValidObj.block !== undefined) {
-                    corruptedIdx = isChainValidObj.block;
-                }
-            }
-            let isCorrupted = !isChainValidObj.valid && corruptedIdx !== -1 && index >= corruptedIdx;
-            
-            blockEl.className = `block-card ${index === 0 ? 'genesis' : ''} ${isCorrupted ? 'corrupted' : ''}`;
-            
-            let txsHtml = '';
-            if(typeof block.transactions === 'string') {
-                txsHtml = `<li>${block.transactions}</li>`;
-            } else {
-                block.transactions.forEach(tx => {
-                    txsHtml += `<li>[${tx.studentId}] ${tx.action}: <b>${tx.bookName}</b> <br><small>(${tx.timestamp})</small></li>`;
-                });
-            }
+        users[user] = pass;
+        localStorage.setItem('usersDB', JSON.stringify(users));
+        alert("Đăng ký thành công! Hãy đăng nhập.");
+        document.getElementById('registerForm').reset();
+        toggleAuth(true);
+    });
 
-            blockEl.innerHTML = `
-                <div class="block-header">BLOCK #${block.index}</div>
-                <p><b>Thời gian:</b> ${block.timestamp}</p>
-                <p><b>Dữ liệu mượn/trả:</b></p>
-                <ul style="padding-left: 15px; margin: 5px 0;">${txsHtml}</ul>
-                <p><b>Nonce:</b> ${block.nonce}</p>
-                <p><b>Mã băm hiện tại (Hash):</b> <span class="hash-text">${block.hash}</span></p>
-                <p><b>Mã khối trước (Previous Hash):</b> <span class="hash-text">${block.previousHash}</span></p>
-            `;
-            blockchainView.appendChild(blockEl);
-        });
+    // Xử lý Đăng nhập
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const user = document.getElementById('loginUsername').value.trim();
+        const pass = document.getElementById('loginPassword').value;
 
-        // 2. Lấy dữ liệu các giao dịch đang chờ
-        const pendingRes = await fetch('/api/pending');
-        const pendingData = await pendingRes.json();
-        const pendingList = document.getElementById('pendingList');
-        if(pendingData.length === 0) {
-            pendingList.innerHTML = "<i>Không có giao dịch nào chờ đóng khối.</i>";
+        let users = JSON.parse(localStorage.getItem('usersDB'));
+        if (users[user] && users[user] === pass) {
+            // Lưu trạng thái phiên đăng nhập vào sessionStorage
+            sessionStorage.setItem('currentUser', user);
+            checkAuth();
         } else {
-            pendingList.innerHTML = '<ul style="margin:0; padding-left:15px;">' + 
-                pendingData.map(tx => `<li><b>${tx.studentId}</b> đăng ký <b>${tx.action}</b> cuốn "${tx.bookName}"</li>`).join('') + 
-                '</ul>';
+            alert("Sai Mã số sinh viên hoặc Mật khẩu!");
+        }
+    });
+
+    // Kiểm tra trạng thái đăng nhập khi tải trang
+    function checkAuth() {
+        const currentUser = sessionStorage.getItem('currentUser');
+        if (currentUser) {
+            document.getElementById('authContent').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('displayUser').innerText = currentUser;
+            document.getElementById('studentId').value = currentUser; // Tự điền MSV vào form
+            updateUI(); // Gọi lấy API blockchain
+        } else {
+            document.getElementById('authContent').style.display = 'flex';
+            document.getElementById('mainContent').style.display = 'none';
+        }
+    }
+
+    // Xử lý Đăng xuất
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        sessionStorage.removeItem('currentUser');
+        document.getElementById('loginForm').reset();
+        checkAuth();
+    });
+
+
+    // --- PHẦN LOGIC BLOCKCHAIN GỐC CỦA BẠN VÀ KHỞI CHẠY ---
+    async function updateUI() {
+        try {
+            // Tránh gọi API khi chưa đăng nhập thành công
+            if (!sessionStorage.getItem('currentUser')) return;
+
+            // 1. Lấy dữ liệu chuỗi khối
+            const res = await fetch('/api/chain');
+            const data = await res.json();
+            
+            const isChainValidObj = data.isValid !== undefined ? data.isValid : data.status;
+            const currentChain = data.chain;
+
+            const statusBox = document.getElementById('chainStatus');
+            if(isChainValidObj.valid) {
+                statusBox.className = "status-box status-valid";
+                statusBox.innerText = "✅ Hệ thống Blockchain an toàn. Toàn bộ lịch sử mượn trả khớp mã Hash!";
+            } else {
+                statusBox.className = "status-box status-invalid";
+                const reason = isChainValidObj.reason ? isChainValidObj.reason : `Phát hiện can thiệp tại khối số ${isChainValidObj.block}`;
+                statusBox.innerText = `❌ PHÁT HIỆN GIAN LẬN DỮ LIỆU: ${reason}`;
+            }
+
+            const blockchainView = document.getElementById('blockchainView');
+            blockchainView.innerHTML = '';
+
+            currentChain.forEach((block, index) => {
+                const blockEl = document.createElement('div');
+                
+                let corruptedIdx = -1;
+                if (!isChainValidObj.valid) {
+                    if (isChainValidObj.reason) {
+                        const match = isChainValidObj.reason.match(/\d+/);
+                        if (match) corruptedIdx = parseInt(match[0]);
+                    } else if (isChainValidObj.block !== undefined) {
+                        corruptedIdx = isChainValidObj.block;
+                    }
+                }
+                let isCorrupted = !isChainValidObj.valid && corruptedIdx !== -1 && index >= corruptedIdx;
+                
+                blockEl.className = `block-card ${index === 0 ? 'genesis' : ''} ${isCorrupted ? 'corrupted' : ''}`;
+                
+                let txsHtml = '';
+                if(typeof block.transactions === 'string') {
+                    txsHtml = `<li>${block.transactions}</li>`;
+                } else {
+                    block.transactions.forEach(tx => {
+                        txsHtml += `<li>[${tx.studentId}] ${tx.action}: <b>${tx.bookName}</b> <br><small>(${tx.timestamp})</small></li>`;
+                    });
+                }
+
+                blockEl.innerHTML = `
+                    <div class="block-header">BLOCK #${block.index}</div>
+                    <p><b>Thời gian:</b> ${block.timestamp}</p>
+                    <p><b>Dữ liệu mượn/trả:</b></p>
+                    <ul style="padding-left: 15px; margin: 5px 0;">${txsHtml}</ul>
+                    <p><b>Nonce:</b> ${block.nonce}</p>
+                    <p><b>Mã băm hiện tại (Hash):</b> <span class="hash-text">${block.hash}</span></p>
+                    <p><b>Mã khối trước (Previous Hash):</b> <span class="hash-text">${block.previousHash}</span></p>
+                `;
+                blockchainView.appendChild(blockEl);
+            });
+
+            // 2. Lấy dữ liệu các giao dịch đang chờ
+            const pendingRes = await fetch('/api/pending');
+            const pendingData = await pendingRes.json();
+            const pendingList = document.getElementById('pendingList');
+            if(pendingData.length === 0) {
+                pendingList.innerHTML = "<i>Không có giao dịch nào chờ đóng khối.</i>";
+            } else {
+                pendingList.innerHTML = '<ul style="margin:0; padding-left:15px;">' + 
+                    pendingData.map(tx => `<li><b>${tx.studentId}</b> đăng ký <b>${tx.action}</b> cuốn "${tx.bookName}"</li>`).join('') + 
+                    '</ul>';
+            }
+        } catch (err) {
+            console.error("Lỗi cập nhật UI / Chưa kết nối API: ", err);
         }
     }
 
@@ -211,8 +338,8 @@
         }
     });
 
-    // Chạy tải lại UI ngay lần đầu truy cập trang
-    updateUI();
+    // Chạy kiểm tra đăng nhập ngay khi mở trang
+    checkAuth();
 </script>
 </body>
 </html>
