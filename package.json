@@ -1,0 +1,13 @@
+{
+  "name": "library-blockchain",
+  "version": "1.0.0",
+  "description": "Mô phỏng Blockchain trong Quản lý Thư viện",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "express": "^4.19.2"
+  }
+}
